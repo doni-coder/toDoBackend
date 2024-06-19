@@ -6,6 +6,7 @@ import { User } from "../Models/user.model.js";
 const registerUser = () => {
   return asyncHandler(async (req, res, next) => {
     const { username, email, password } = req.body;
+    console.log(req.body);
     if (!username && !email && !password) {
       throw new ApiError(400, "username email password required");
     }
