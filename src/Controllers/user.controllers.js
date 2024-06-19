@@ -38,4 +38,106 @@ const registerUser = asyncHandler(async (req, res, next) => {
     .json(new ApiResponse(200, createdUser, "user registered succesful"));
 });
 
-export { registerUser };
+const generateRefreshAndAccessToken = async (userId) => {
+  const user = await User.findById(userId);
+  const refreshToken = await user.generateRefreshToken();
+  const accessToken = await user.generateAccessToken();
+
+  user.refreshToken = refreshToken;
+  await user.save({ validateBeforeSave: false });
+
+  return { refreshToken, accessToken };
+};
+
+const loginUser = asyncHandler(async (req, res, next) => {
+  const { username, password, email } = req.body;
+  console.log(req.body);
+  if (!(username || email) && !password) {
+    throw new ApiError(400, "username & password required");
+  }
+  const user = await User.findOne({
+    $or: [{ email }, { username }],
+  });
+  if (!user) {
+    throw new ApiError(400, "user not found");
+  }
+  const isPasswordValid = await user.isPasswordCorrect(password);
+
+  if (!isPasswordValid) {
+    throw new ApiError(400, "incorrect password");
+  }
+
+  const { refreshToken, accessToken } = await generateRefreshAndAccessToken(
+    user._id
+  );
+
+  const loggedinUser = await User.findById(user._id).select(
+    "-password -refreshToken"
+  );
+
+  const options = {
+    httpOnly: true,
+    secure: true,
+  };
+
+  return res
+    .status(200)
+    .cookie("refreshToken", refreshToken, options)
+    .cookie("accessToken", accessToken, options)
+    .json(new ApiResponse(200, loggedinUser, "loggin succesful"));
+});
+
+const logoutUser = asyncHandler(async (req, res, next) => {
+  const user = await User.findByIdAndUpdate(
+    req.user._id,
+    {
+      $set: {
+        refreshToken: undefined,
+      },
+    },
+    {
+      new: true,
+    }
+  );
+
+  const options = {
+    httpOnly: true,
+    secure: true,
+  };
+
+  return res
+    .status(200)
+    .clearCookie("accessToken", options)
+    .clearCookie("refreshToken", options)
+    .json(new ApiResponse(200, {}, "logout succesful"));
+});
+
+// a end point for getting todo
+
+const getUserTodo = asyncHandler(async (req, res, next) => {
+  const userId = req.user?._id;
+
+  const todo = await User.aggregate([
+    {
+      $match: {
+        _id: userId,
+      },
+    },
+    {
+      $lookup: {
+        from: "todos",
+        localField: "_id",
+        foreignField: "createdBy",
+        as: "todos",
+      },
+    },
+  ]);
+
+  if (!todo?.length) {
+    throw new ApiError(404, "todo doesnot exist");
+  }
+
+  return res.status(200).json(new ApiResponse(200, todo[0], "data fetched"));
+});
+
+export { registerUser, loginUser, logoutUser,getUserTodo };

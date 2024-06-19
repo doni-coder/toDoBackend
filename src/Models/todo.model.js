@@ -15,8 +15,16 @@ const todoSchema = new Schema({
     },
     createdBy:{
         type:Schema.Types.ObjectId,
-        ref:"user"
+        ref:"user",
+        required:true
     }
-},{timestamps:true})
+},{timestamps:true});
+
+todoSchema.methods.setIsCompletedTrue = function(){
+    return true
+}
+todoSchema.methods.setIsCompletedFalse = function(){
+    return false
+}
 
 export const Todo = mongoose.model('todo', todoSchema)
